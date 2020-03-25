@@ -53,18 +53,14 @@ def pull_data(url):
     return (tseries, np.array(data, dtype='int'), dataLabels)
 
 
-
 def plot(country, locale=None, metric='confirmed'):
-    url = COVID_URL
     if metric == 'confirmed':
-        url += CONFIRMED_EXTENSION
+        case_t, case, case_labels = conf
     elif metric == 'deaths':
-        url += DEATH_EXTENSION
+        case_t, case, case_labels = dead
     else:
         print('select `confirmed` or `deaths`')
         raise ValueError
-
-    case_t, case, case_labels = pull_data(url)
 
     text = ''
 
@@ -113,3 +109,6 @@ def formatting():
 #                 str += ' [%s]' % a
 #             str += '\n'
 #     return str
+
+conf = pull_data(COVID_URL+CONFIRMED_EXTENSION)
+dead = pull_data(COVID_URL+DEATH_EXTENSION)
