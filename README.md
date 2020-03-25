@@ -1,10 +1,14 @@
 # covidpanic
 A small python 3 script for plotting the terrifying progress of the virus.
 
-## Intended workflow:
-1. Run the script from `ipython --matplotlib`
-2. plot('country_name', [locale, e.g. state], metric=('confirmed'|'deaths'))
-3. Optionally, format the graph with plt.yscale('log')
+## Example workflow:
+```
+zsh% ipython --matplotlib
+In[1]: run covid.py # populates your namespace
+In[2]: plot('china', metric='deaths')
+In[3]: plot('australia', 'new south wales', metric='confirmed')
+In[4]: plt.yscale('log') # Optional log scale for deceiving yourself
+```
 
 ## Dependencies
 `NumPy`, `matplotlib`, `requests`
