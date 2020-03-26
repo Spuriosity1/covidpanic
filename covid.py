@@ -110,5 +110,9 @@ def formatting():
 #             str += '\n'
 #     return str
 
+def refresh():
+    conf = pull_data(COVID_URL+CONFIRMED_EXTENSION)
+    dead = pull_data(COVID_URL+DEATH_EXTENSION)
+
 conf = pull_data(COVID_URL+CONFIRMED_EXTENSION)
 dead = pull_data(COVID_URL+DEATH_EXTENSION)
