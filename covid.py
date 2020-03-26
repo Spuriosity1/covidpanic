@@ -1,118 +1,112 @@
-import requests
-import csv
-import io
+from covidlib import *
+
 import matplotlib.pyplot as plt
 import numpy as np
-from datetime import datetime
+from scipy import stats
+
+
 
 
 COVID_URL = 'https://github.com/CSSEGISandData/COVID-19/raw/master/csse_covid_19_data/csse_covid_19_time_series/'
 CONFIRMED_EXTENSION = 'time_series_covid19_confirmed_global.csv'
 DEATH_EXTENSION = 'time_series_covid19_deaths_global.csv'
 
-HELPTEXT = {}
-
-# Update working database
-def pull_data(url):
-    r = requests.get(url, allow_redirects=True)
-    if r.status_code != 200:
-        print("Error: bad request")
-    f = io.StringIO(r.text)
-    dataLabels = {}
-    reader = csv.reader(f, delimiter=',')
-
-    data=[]
-    tseries = np.empty((0,))
-
-    idx = -1
-    for row in reader:
-        if idx == -1:
-            # First row, the time series labels
-            t = [datetime.strptime(d, '%m/%d/%y').strftime('%Y-%m-%d') for d in row[4:]]
-            tseries = np.array(t,dtype='datetime64')
-            idx=0
-            continue
-
-        country = row[1].lower()
-        locale = row[0].lower()
-
-        if country in dataLabels:
-            # row[1] is country code
-            dataLabels[country][locale] = idx
-        else:
-            dataLabels[country] = {}
-            if locale == '':
-                #Only country-level info available
-                dataLabels[country] = idx
-            else:
-                dataLabels[country][locale] = idx
-
-        data.append(row[4:])
-        idx += 1
-
-    return (tseries, np.array(data, dtype='int'), dataLabels)
 
 
-def plot(country, locale=None, metric='confirmed'):
-    if metric == 'confirmed':
-        case_t, case, case_labels = conf
-    elif metric == 'deaths':
-        case_t, case, case_labels = dead
-    else:
-        print('select `confirmed` or `deaths`')
-        raise ValueError
+class CovidData(object):
+    """Has methods for pulling data, plotting and doing analysis."""
 
-    text = ''
+    def __init__(self):
+        self.conf_url = COVID_URL + CONFIRMED_EXTENSION
+        self.dead_url = COVID_URL + DEATH_EXTENSION
+        self.loaded = {}
+        self.D = {
+            'confirmed': ('confirmed', 'confirmedTime', 'COVID-19 Confirmed Cases'),
+            'deaths': ('deaths', 'deathsTime', 'COVID-19 Deaths')
+            }
+        self.pull()
 
-    try:
-        if locale is None:
-            text += country
-            if type(case_labels[country]) is int:
-                X = case[case_labels[country]]
-            elif type(case_labels[country]) is dict:
-                X = np.zeros_like(case[0,:])
-                for l in case_labels[country]:
-                    X += case[case_labels[country][l]]
-            else:
-                print("Unexpected type found in case_labels")
-        else:
-            text += country +' - '+locale
-            X = case[case_labels[country][locale]]
-    except KeyError:
+    def pull(self):
+        self.conf = pull_data(self.conf_url)
+        self.dead = pull_data(self.dead_url)
+
+
+    def parse_label(self, country, locale, case):
         try:
-            print(case_labels[country].keys())
+            if locale is None:
+                if type(case['labels'][country]) is int:
+                    X = case['data'][case['labels'][country]]
+                elif type(case['labels'][country]) is dict:
+                    X = np.zeros_like(case['data'][0,:])
+                    for l in case['labels'][country]:
+                        X += case['data'][case['labels'][country][l]]
+                else:
+                    print("Unexpected type found in case_labels")
+            else:
+                X = case['data'][case['labels'][country][locale]]
         except KeyError:
-            print(case_labels.keys())
-    else:
-        plt.plot(case_t, X, '-' if metric is 'deaths' else '--',label = text)
-        formatting()
+            try:
+                choice = case['labels'][country].keys()
+                print('Available locales in ' + country + ':')
+                print(choice)
+            except KeyError:
+                choice = case['labels'].keys()
+                print('Available countries:')
+                print(case['labels'].keys())
+        else:
+            return X
 
-def formatting():
-    plt.legend()
-    plt.title('COVID-19 confirmed cases')
-    plt.xticks(rotation=45)
-    plt.show()
+    def load(self, country, locale=None):
+        l = country if locale is None else locale+', '+country
+        self.loaded[l]={}
+        for metric, c in zip(['confirmed','deaths'], [self.conf, self.dead]):
+            self.loaded[l][metric]= self.parse_label(country, locale, c)
+            self.loaded[l][metric+'Time']=c['tseries']
 
-# HELPTEXT['help'] = {'args': ['command'], 'text': 'Get detailed help for [command]'}
-# def help(cmd):
-#     str = ''
-#     if cmd in HELPTEXT:
-#         str += '!virus %s' % cmd
-#         for a in HELPTEXT[cmd]['args']:
-#             str += ' [%s]' % a
-#         str += ': %s\n' % HELPTEXT[cmd]['text']
-#     else:
-#         str += 'Virus commands:\n\n'
-#         for text in HELPTEXT:
-#             str += '!virus %s' % text
-#             for a in HELPTEXT[text]['args']:
-#                 str += ' [%s]' % a
-#             str += '\n'
-#     return str
+    def plot(self, metric='confirmed', cutoff=None):
+        # metric may be confirmed or deaths
+        # cutoff specified min cases
+        Y_key, T_key, title = self.D[metric]
 
-def refresh():
-    conf = pull_data(COVID_URL+CONFIRMED_EXTENSION)
-    dead = pull_data(COVID_URL+DEATH_EXTENSION)
+        for l in self.loaded:
+            Y = self.loaded[l][Y_key]
+            T = self.loaded[l][T_key]
 
-conf = pull_data(COVID_URL+CONFIRMED_EXTENSION)
-dead = pull_data(COVID_URL+DEATH_EXTENSION)
+            if cutoff is not None:
+                T = T[Y>=cutoff]
+                T = T-T[0]
+                Y = Y[Y>=cutoff]
+
+            plt.plot( T, Y, '--', label = l, color =colour_from_str(l) )
+
+        plt.title(title)
+        plt.legend()
+        plt.xticks(rotation=45)
+        plt.show()
+
+    def analysis(self, metric='confirmed', cutoff=100):
+        # Does not accept both.
+        for l in self.loaded:
+            X = self.loaded[l][metric]
+            T = self.loaded[l][metric+'Time']
+            if cutoff is not None:
+                # Truncate to only values higher than the cutoff
+                T = T[X>=cutoff]
+                T = T - T[0]
+                X = X[X>=cutoff]
+
+            logX = np.log(X)
+            slope, intercept, r_value, p_value, std_err = stats.linregress(T,logX)
+            print('Doubling time is ', np.log(2)/slope)
+
+
+
+d = CovidData()
+
+
+d.load('australia', 'victoria')
+d.load('australia', 'new south wales')
+d.load('malaysia')
+
+d.plot()
+d.analysis()
