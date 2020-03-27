@@ -5,7 +5,7 @@ import numpy as np
 from datetime import datetime
 
 # Update working database
-def pull_data(url):
+def pull_data(url, datefmt):
     r = requests.get(url, allow_redirects=True)
     if r.status_code != 200:
         print("Error: bad request")
@@ -20,7 +20,10 @@ def pull_data(url):
     for row in reader:
         if idx == -1:
             # First row, the time series labels
-            t = [datetime.strptime(d, '%m/%d/%y').strftime('%Y-%m-%d') for d in row[4:]]
+            t = []
+            for d in row[4:]:
+                t.append(datetime.strptime(d, datefmt).strftime('%Y-%m-%d'))
+            # t = [datetime.strptime(d, '%-m/%-d/%Y').strftime('%Y-%m-%d') for d in row[4:]]
             tseries = np.array(t,dtype='datetime64')
             idx=0
             continue
@@ -44,12 +47,29 @@ def pull_data(url):
 
     return {'tseries': tseries, 'data': np.array(data, dtype='int'), 'labels': dataLabels}
 
-def colour_from_str(s):
+
+def colour_from_str(s, colour_offset=0):
     n = 0
     i=0
     for c in s:
         n = n+(ord(c)-97)*26**i
         i += 1
 
-    n = (n*15485863)%(16**6)
+    n = (n*15485863 - colour_offset)%(16**6)
     return '#{0:0{1}X}'.format(n,6)
+
+def trim(T, Y, Tcutoff, Ycutoff):
+
+    if Ycutoff is not None:
+        # Truncate to only values higher than the cutoff
+        T = T[Y>=Ycutoff]
+        T = T - T[0]
+        T = T.astype('int64')
+        Y = Y[Y>=Ycutoff]
+
+    if Tcutoff is not None:
+        if T.shape[0] > Tcutoff:
+            T = T[-Tcutoff:]
+            Y = Y[-Tcutoff:]
+
+    return (T,Y)
