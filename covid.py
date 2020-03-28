@@ -122,7 +122,7 @@ class CovidData(object):
         for l in self.loaded:
             print('['+l+']')
 
-    def plot(self, metric='confirmed', Ycutoff=None, num_days=None, scale='log', label=True, style=None):
+    def plot(self, metric='confirmed', Ycutoff=None, num_days=None, label=True, style=None):
         # metric may be confirmed or deaths
         # cutoff specified min cases
         Y_key, T_key, title = self.D[metric]
@@ -142,30 +142,57 @@ class CovidData(object):
         plt.title(title)
         plt.legend()
         plt.xticks(rotation=45)
-        plt.yscale(scale)
+        plt.yscale('log')
         plt.show()
 
-    def analysis(self, metric='confirmed', Ycutoff=100, num_days=7):
+    def analysis(self, metric='confirmed', Ycutoff=100, num_days=None, plot=True):
         if num_days is not None:
             print("Using last {0} days' data.\n".format(num_days))
 
+        if plot:
+            plt.clf()
+
+        Y_key, T_key, title = self.D[metric]
+
+        max_T = 0
+
         for l in self.loaded:
             print('['+l+']')
-            T = self.loaded[l][metric+'Time']
-            Y = self.loaded[l][metric]
+            Y = self.loaded[l][Y_key]
+            T = self.loaded[l][T_key]
 
             T, Y = trim(T, Y, num_days, Ycutoff, compare=True)
-            mask = Y>0
-            Y = Y[mask]
-            T = T[mask]
-            if Y.shape[0] ==0:
-                print('Inadequate data for this analysis.')
+
+            max_T = max_T if T.shape[0] <= max_T else T.shape[0]
+
+            if Y.shape[0] == 0:
+                print('Could not find any points above the Y-cutoff.')
+                return
 
             logY = np.log(Y)
             slope, intercept, r_value, p_value, std_err = stats.linregress(T,logY)
             print('   > Doubling time is {0:.1f} days'.format(np.log(2)/slope))
             num_current_infected = np.exp(intercept + slope*(T[-1]+self.assume['incubation_days']))
             print('   > Estimated current infected is {0:,}'.format(int(num_current_infected)))
+
+            if plot:
+                plt.plot( T, Y, '-', label = l,
+                    color =colour_from_str(l, self.colour_offset) )
+                plt.plot( T, np.exp(slope*T + intercept), '--',
+                    color =colour_from_str(l, self.colour_offset) )
+
+        if plot:
+            DTIMES = [2,3,7]
+            T = np.arange(max_T)
+            for tau in DTIMES:
+                plt.plot(T, Ycutoff*np.power(2,T/tau), 'k:')
+            plt.xlabel('Days after hitting %d cases' % Ycutoff)
+            plt.title(title)
+            plt.legend()
+            plt.yscale('log')
+            plt.show()
+
+
 
 d = CovidData()
 
