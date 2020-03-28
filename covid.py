@@ -34,10 +34,24 @@ class CovidData(object):
         self.pull()
 
     def pull(self):
+        old_conf = ''
+        old_dead = ''
+
+        if hasattr(self, 'conf') and hasattr(self,'dead'):
+            old_conf = str(self.conf['tseries'][-1])[:10]
+            old_dead = str(self.dead['tseries'][-1])[:10]
+
         self.conf = pull_data(self.conf_url, '%m/%d/%y')
         self.dead = pull_data(self.dead_url, '%m/%d/%y')
-        # self.recv = pull_data(self.recv_url, '%m/%d/%Y')
 
+        new_conf = str(self.conf['tseries'][-1])[:10]
+        new_dead = str(self.dead['tseries'][-1])[:10]
+
+        print("Updated databases")
+        print("   > Confirmed "+old_conf+" -> ",new_conf)
+        print("   > Deaths    "+old_dead+" -> ",new_dead)
+        # self.recv = pull_data(self.recv_url, '%m/%d/%Y')
+        print()
 
     def parse_label(self, country, locale, case):
         try:
@@ -64,26 +78,51 @@ class CovidData(object):
         else:
             return X
 
-    def load(self, country, locale=None):
-        l = country if locale is None else locale+', '+country
+    def load(self, country):
+        if type(country) is list:
+            for c in country:
+                self.load(c)
+            return
+        elif type(country) is tuple:
+            locale=country[1]
+            country=country[0]
+            l = locale+', '+country
+        elif type(country) is str:
+            l = country
+            locale=None
+
         self.loaded[l]={}
         for metric, c in zip(['confirmed','deaths'], [self.conf, self.dead]):
             self.loaded[l][metric]= self.parse_label(country, locale, c)
             self.loaded[l][metric+'Time']=c['tseries']
 
-    def unload(self, country=None, locale=None):
-        if country is None:
-            self.loaded = {}
-        elif locale is None:
+    def unload(self, country=None):
+        if type(country) is list:
+            for c in country:
+                self.unload(c)
+            return
+        elif type(country) is tuple:
+            del self.loaded[country[1]+', '+country[0]]
+        elif type(country) is str:
             del self.loaded[country]
         else:
-            del self.loaded[locale+', '+country]
+            self.loaded={}
+
+
+
+    # def unload(self, country=None, locale=None):
+    #     if country is None:
+    #         self.loaded = {}
+    #     elif locale is None:
+    #         del self.loaded[country]
+    #     else:
+    #         del self.loaded[locale+', '+country]
 
     def get_loaded(self):
         for l in self.loaded:
             print('['+l+']')
 
-    def plot(self, metric='confirmed', Ycutoff=None, Tcutoff=None, scale='log', label=True, style=None):
+    def plot(self, metric='confirmed', Ycutoff=None, num_days=None, scale='log', label=True, style=None):
         # metric may be confirmed or deaths
         # cutoff specified min cases
         Y_key, T_key, title = self.D[metric]
@@ -95,7 +134,7 @@ class CovidData(object):
             if style is None:
                 style = {'confirmed': '--', 'deaths': '-', 'recovered': ':'}[metric]
 
-            T, Y = trim(T, Y, Tcutoff, Ycutoff)
+            T, Y = trim(T, Y, num_days, Ycutoff)
 
             plt.plot( T, Y, style, label = l if label else None,
                 color =colour_from_str(l, self.colour_offset) )
@@ -106,16 +145,21 @@ class CovidData(object):
         plt.yscale(scale)
         plt.show()
 
-    def analysis(self, metric='confirmed', Ycutoff=100, Tcutoff=7):
-        if Tcutoff is not None:
-            print("Using last {0} days' data.\n".format(Tcutoff))
+    def analysis(self, metric='confirmed', Ycutoff=100, num_days=7):
+        if num_days is not None:
+            print("Using last {0} days' data.\n".format(num_days))
 
         for l in self.loaded:
             print('['+l+']')
             T = self.loaded[l][metric+'Time']
             Y = self.loaded[l][metric]
 
-            T, Y = trim(T, Y, Tcutoff, Ycutoff)
+            T, Y = trim(T, Y, num_days, Ycutoff, compare=True)
+            mask = Y>0
+            Y = Y[mask]
+            T = T[mask]
+            if Y.shape[0] ==0:
+                print('Inadequate data for this analysis.')
 
             logY = np.log(Y)
             slope, intercept, r_value, p_value, std_err = stats.linregress(T,logY)

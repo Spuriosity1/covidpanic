@@ -58,18 +58,20 @@ def colour_from_str(s, colour_offset=0):
     n = (n*15485863 - colour_offset)%(16**6)
     return '#{0:0{1}X}'.format(n,6)
 
-def trim(T, Y, Tcutoff, Ycutoff):
+def trim(T, Y, num_days, Ycutoff, compare=False):
 
     if Ycutoff is not None:
         # Truncate to only values higher than the cutoff
         T = T[Y>=Ycutoff]
-        T = T - T[0]
-        T = T.astype('int64')
         Y = Y[Y>=Ycutoff]
 
-    if Tcutoff is not None:
-        if T.shape[0] > Tcutoff:
-            T = T[-Tcutoff:]
-            Y = Y[-Tcutoff:]
+    if num_days is not None:
+        if T.shape[0] > num_days:
+            T = T[-num_days:]
+            Y = Y[-num_days:]
+
+    if compare and T.shape[0] > 0:
+        T = T - T[0]
+        T = T.astype('int64')
 
     return (T,Y)
