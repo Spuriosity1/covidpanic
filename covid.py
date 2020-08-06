@@ -136,14 +136,15 @@ class CovidData(object):
 
             T, Y = trim(T, Y, num_days, Ycutoff)
 
-            plt.plot( T, Y, style, label = l if label else None,
+            plt.plot( T, Y, style, label = l,
                 color =colour_from_str(l, self.colour_offset) )
 
         plt.title(title)
         plt.legend()
+        plt.show()
         plt.xticks(rotation=45)
         plt.yscale('log')
-        plt.show()
+
 
     def analysis(self, metric='confirmed', Ycutoff=100, num_days=None, plot=True):
         if num_days is not None:
@@ -160,6 +161,12 @@ class CovidData(object):
             print('['+l+']')
             Y = self.loaded[l][Y_key]
             T = self.loaded[l][T_key]
+
+            t0 = None
+            if num_days is not None and T.shape[0] >= num_days:
+                t0 = T[-num_days]
+            else:
+                t0 = T[0]
 
             T, Y = trim(T, Y, num_days, Ycutoff, compare=True)
 
@@ -186,7 +193,11 @@ class CovidData(object):
             T = np.arange(max_T)
             for tau in DTIMES:
                 plt.plot(T, Ycutoff*np.power(2,T/tau), 'k:')
-            plt.xlabel('Days after hitting %d cases' % Ycutoff)
+
+            if num_days is None:
+                plt.xlabel('Days after hitting %d cases' % Ycutoff)
+            else:
+                plt.xlabel('Days after ' + str(T[0]))
             plt.title(title)
             plt.legend()
             plt.yscale('log')
@@ -197,11 +208,14 @@ class CovidData(object):
 d = CovidData()
 
 plt.clf()
-d.load('australia')
-d.load('us')
-d.load('denmark')
-d.load('united kingdom')
-d.load('austria')
+#
+# states = ['australian capital territory', 'new south wales', 'northern territory', 'queensland', 'south australia', 'tasmania', 'victoria', 'western australia']
+# d.load([('australia',x) for x in states])
 
-d.plot('deaths')
-d.analysis()
+d.load('australia')
+d.load('sweden')
+d.load('italy')
+
+d.plot()
+# d.plot('deaths')
+# d.analysis()
